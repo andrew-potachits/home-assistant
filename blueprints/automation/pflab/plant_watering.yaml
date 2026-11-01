@@ -1,0 +1,65 @@
+blueprint:
+  name: Plant Watering Reminder
+  description: >
+    Checks a soil moisture sensor at 09:00, 15:00 and 21:00 and sends a
+    Telegram message when moisture is below the threshold or the sensor is
+    unavailable.
+  domain: automation
+  input:
+    soil_sensor:
+      name: Soil moisture sensor
+      selector:
+        entity:
+          domain: sensor
+          device_class: moisture
+    threshold:
+      name: Moisture threshold
+      description: Notify when soil moisture is below this value.
+      default: 30
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+    chat_id:
+      name: Telegram chat ID
+      description: Must be an allowed chat of your Telegram bot.
+      selector:
+        text:
+
+variables:
+  soil_sensor: !input soil_sensor
+  threshold: !input threshold
+  chat_id: !input chat_id
+  sensor_name: "{{ state_attr(soil_sensor, 'friendly_name') or soil_sensor }}"
+  sensor_area: "{{ area_name(soil_sensor) or 'no area' }}"
+
+mode: single
+
+triggers:
+  # Fixed check times keep 23:00-08:00 quiet
+  - trigger: time
+    at:
+      - "09:00:00"
+      - "15:00:00"
+      - "21:00:00"
+
+actions:
+  - choose:
+      - conditions: "{{ not (states(soil_sensor) | is_number) }}"
+        sequence:
+          - action: telegram_bot.send_message
+            data:
+              chat_id: "{{ chat_id | int }}"
+              message: >
+                🌱 {{ sensor_name }} ({{ sensor_area }}) is {{ states(soil_sensor) }}.
+                Check its battery or connection.
+      - conditions: "{{ states(soil_sensor) | float < threshold | float }}"
+        sequence:
+          - action: telegram_bot.send_message
+            data:
+              chat_id: "{{ chat_id | int }}"
+              message: >
+                🌱 {{ sensor_name }} ({{ sensor_area }}): soil moisture
+                {{ states(soil_sensor) }}% is below {{ threshold }}%. Time to water.

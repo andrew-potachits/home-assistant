@@ -1,0 +1,167 @@
+blueprint:
+  name: TRV Room-Sensor Control, Window Cutoff & Schedule
+  description: >
+    Feeds a room sensor into the TRV as external temperature, sets the target
+    temperature (comfort/eco by schedule), and turns the TRV off while windows
+    are open.
+  domain: automation
+  input:
+    room_temp_sensor:
+      name: Room temperature sensor
+      selector:
+        entity:
+          domain: sensor
+          device_class: temperature
+    trv_external_temp_number:
+      name: TRV external temperature number
+      selector:
+        entity:
+          domain: number
+    trv_climate_entity:
+      name: TRV climate entity
+      selector:
+        entity:
+          domain: climate
+    window_sensors:
+      name: Window & door sensors
+      default: []
+      selector:
+        entity:
+          domain: binary_sensor
+          multiple: true
+    comfort_temp:
+      name: Comfort temperature
+      default: 21
+      selector:
+        number:
+          min: 5
+          max: 30
+          step: 0.5
+          unit_of_measurement: "°C"
+    eco_temp:
+      name: Eco temperature (outside schedule)
+      description: Used when the schedule is off. Ignored if no schedule is selected.
+      default: 17
+      selector:
+        number:
+          min: 5
+          max: 30
+          step: 0.5
+          unit_of_measurement: "°C"
+    schedule:
+      name: Comfort schedule (optional)
+      description: Pick zero or one schedule helper. ON = comfort, OFF = eco. Leave empty for always comfort.
+      default: []
+      selector:
+        entity:
+          domain: schedule
+          multiple: true
+    window_open_delay:
+      name: Window open delay
+      default:
+        hours: 0
+        minutes: 1
+        seconds: 0
+      selector:
+        duration:
+    window_close_delay:
+      name: Window closed delay
+      default:
+        hours: 0
+        minutes: 0
+        seconds: 30
+      selector:
+        duration:
+    heating_mode:
+      name: HVAC mode when heating
+      default: heat
+      selector:
+        select:
+          options:
+            - heat
+            - auto
+
+variables:
+  room_temp_sensor: !input room_temp_sensor
+  window_sensors: !input window_sensors
+  schedules: !input schedule
+  trv_climate: !input trv_climate_entity
+  comfort_temp: !input comfort_temp
+  eco_temp: !input eco_temp
+  windows_open: >
+    {{ window_sensors | select('is_state', 'on') | list | count > 0 }}
+  schedule_active: >
+    {{ schedules | count == 0 or (schedules | select('is_state', 'on') | list | count > 0) }}
+  target_temp: >
+    {{ comfort_temp if schedule_active else eco_temp }}
+
+mode: restart
+
+triggers:
+  - trigger: state
+    entity_id: !input room_temp_sensor
+    id: update
+  - trigger: time_pattern
+    minutes: "/15"
+    id: update
+  - trigger: state
+    entity_id: !input schedule
+    id: update
+  - trigger: state
+    entity_id: !input window_sensors
+    to: "on"
+    for: !input window_open_delay
+    id: window_open
+  - trigger: state
+    entity_id: !input window_sensors
+    to: "off"
+    for: !input window_close_delay
+    id: window_closed
+
+actions:
+  - choose:
+      # Any window open -> TRV off
+      - conditions: "{{ windows_open }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ not is_state(trv_climate, 'off') }}"
+            then:
+              - action: climate.set_hvac_mode
+                target:
+                  entity_id: !input trv_climate_entity
+                data:
+                  hvac_mode: "off"
+    # All windows closed
+    default:
+      # Push room temperature to the TRV
+      - if:
+          - condition: template
+            value_template: "{{ states(room_temp_sensor) | is_number }}"
+        then:
+          - action: number.set_value
+            target:
+              entity_id: !input trv_external_temp_number
+            data:
+              value: "{{ states(room_temp_sensor) | float }}"
+      # Restore heating only right after a window closes
+      - if:
+          - condition: template
+            value_template: "{{ trigger.id == 'window_closed' }}"
+        then:
+          - action: climate.set_hvac_mode
+            target:
+              entity_id: !input trv_climate_entity
+            data:
+              hvac_mode: !input heating_mode
+      # Apply comfort/eco setpoint if it differs
+      - if:
+          - condition: template
+            value_template: >
+              {{ state_attr(trv_climate, 'temperature') | float(0) != target_temp | float }}
+        then:
+          - action: climate.set_temperature
+            target:
+              entity_id: !input trv_climate_entity
+            data:
+              temperature: "{{ target_temp }}"
