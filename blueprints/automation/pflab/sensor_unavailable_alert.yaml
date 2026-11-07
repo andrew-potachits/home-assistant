@@ -1,0 +1,77 @@
+blueprint:
+  name: Sensor Unavailable Alert
+  description: >
+    Sends a Telegram message when a sensor becomes unavailable. Messages are
+    sent only while the schedule is on. Sensors that went unavailable while
+    the schedule was off are reported when the schedule turns on.
+  domain: automation
+  input:
+    sensors:
+      name: Sensors
+      selector:
+        entity:
+          multiple: true
+    schedule:
+      name: Notification schedule
+      description: Messages are sent only while this schedule is on.
+      selector:
+        entity:
+          domain: schedule
+    unavailable_for:
+      name: Unavailable for
+      description: Wait this long before alerting, to skip short dropouts.
+      default:
+        hours: 0
+        minutes: 5
+        seconds: 0
+      selector:
+        duration:
+    chat_id:
+      name: Telegram chat ID
+      description: Must be an allowed chat of your Telegram bot.
+      selector:
+        text:
+
+variables:
+  sensors: !input sensors
+  chat_id: !input chat_id
+  down: >
+    {{ expand(sensors) | selectattr('state', 'eq', 'unavailable')
+       | map(attribute='name') | list }}
+
+mode: queued
+
+triggers:
+  - trigger: state
+    entity_id: !input sensors
+    to: unavailable
+    for: !input unavailable_for
+    id: sensor
+  # Report sensors that went down outside the schedule
+  - trigger: state
+    entity_id: !input schedule
+    to: "on"
+    id: schedule
+
+conditions:
+  - condition: state
+    entity_id: !input schedule
+    state: "on"
+
+actions:
+  - choose:
+      - conditions: "{{ trigger.id == 'sensor' }}"
+        sequence:
+          - action: telegram_bot.send_message
+            data:
+              chat_id: "{{ chat_id | int }}"
+              message: >
+                ⚠️ {{ trigger.to_state.name }} ({{ area_name(trigger.entity_id) or 'no area' }})
+                is unavailable. Check its battery or connection.
+      - conditions: "{{ trigger.id == 'schedule' and down | count > 0 }}"
+        sequence:
+          - action: telegram_bot.send_message
+            data:
+              chat_id: "{{ chat_id | int }}"
+              message: >
+                ⚠️ Unavailable sensors: {{ down | join(', ') }}.
