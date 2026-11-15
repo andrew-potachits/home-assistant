@@ -1,0 +1,177 @@
+# Storage-mode dashboard, pushed to HA with ha_config_set_dashboard.
+# url_path: home-main · title: Дом · icon: mdi:home
+views:
+  - title: Дом
+    path: home
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Гостиная
+            icon: mdi:sofa
+            tap_action:
+              action: navigate
+              navigation_path: /config/areas/area/living_room
+          # Room card: entity is the room temperature sensor. The TRV and the
+          # window sensors (device_class window) are found from the card's area.
+          # The templates are YAML anchors, reused by the other room cards.
+          - type: custom:mushroom-template-card
+            entity: sensor.gostinaia_hmd2_temperature
+            area: living_room
+            primary: &room_primary >-
+              {{ (states(entity) | float | round(1) ~ ' °C') if states(entity) | is_number else 'нет связи' }}
+            secondary: &room_secondary >-
+              {% set trv = area_entities(area) | select('match', 'climate') | first | default('') %}{% set open = area_entities(area) | select('match', 'binary_sensor') | select('is_state_attr', 'device_class', 'window') | select('is_state', 'on') | list | count > 0 -%}
+              {% set act = state_attr(trv, 'hvac_action') %}{% set target = state_attr(trv, 'temperature') -%}
+              {{ 'Окно открыто · ' if open }}{{ {'heating': 'Нагрев', 'idle': 'Ожидание', 'off': 'Выкл'}.get(act, act) }}{{ (' · цель ' ~ '%g' | format(target) ~ '°') if target is not none and act != 'off' }}
+            icon: &room_icon >-
+              {% set trv = area_entities(area) | select('match', 'climate') | first | default('') -%}
+              {{ 'mdi:radiator-off' if state_attr(trv, 'hvac_action') == 'off' else 'mdi:radiator' }}
+            color: &room_color >-
+              {% set trv = area_entities(area) | select('match', 'climate') | first | default('') %}{% set open = area_entities(area) | select('match', 'binary_sensor') | select('is_state_attr', 'device_class', 'window') | select('is_state', 'on') | list | count > 0 -%}
+              {{ 'red' if open else ('orange' if state_attr(trv, 'hvac_action') == 'heating' else 'disabled') }}
+            badge_icon: &room_badge >-
+              {% set open = area_entities(area) | select('match', 'binary_sensor') | select('is_state_attr', 'device_class', 'window') | select('is_state', 'on') | list | count > 0 -%}
+              {{ 'mdi:window-open-variant' if open }}
+            badge_color: red
+            features: &room_features
+              - type: trend-graph
+                hours_to_show: 24
+            # Actions can't use templates, so the TRV is named here.
+            tap_action:
+              action: more-info
+              entity: climate.trv4
+            grid_options:
+              columns: 12
+          # Plant card: threshold helper is derived from the sensor ID
+          # (sensor.soilN_soil_moisture -> input_number.soilN_threshold).
+          # The templates are YAML anchors, reused by the Кабинет plant cards.
+          - type: custom:mushroom-template-card
+            entity: sensor.soil1_soil_moisture
+            primary: Калатея бархатная
+            secondary: &plant_secondary >-
+              {% set m = states(entity) %}{% set t = states(entity | replace('sensor.', 'input_number.') | replace('_soil_moisture', '_threshold')) | int(0) -%}
+              {{ (m | int ~ '%') if m | is_number else 'нет связи' }} · порог {{ t }}%
+            icon: &plant_icon >-
+              {% set m = states(entity) %}{% set t = states(entity | replace('sensor.', 'input_number.') | replace('_soil_moisture', '_threshold')) -%}
+              {{ 'mdi:water-alert' if m | is_number and m | float < t | float(0) else 'mdi:sprout' }}
+            color: &plant_color >-
+              {% set m = states(entity) %}{% set t = states(entity | replace('sensor.', 'input_number.') | replace('_soil_moisture', '_threshold')) -%}
+              {{ 'disabled' if not m | is_number else ('red' if m | float < t | float(0) else 'green') }}
+            features: &plant_features
+              - type: bar-gauge
+                min: 0
+                max: 100
+            tap_action:
+              action: more-info
+            grid_options:
+              columns: 12
+          - type: heading
+            heading: Кухня
+            icon: mdi:countertop
+            tap_action:
+              action: navigate
+              navigation_path: /config/areas/area/kitchen
+          - type: custom:mushroom-template-card
+            entity: sensor.hmd3_temperature
+            area: kitchen
+            primary: *room_primary
+            secondary: *room_secondary
+            icon: *room_icon
+            color: *room_color
+            badge_icon: *room_badge
+            badge_color: red
+            features: *room_features
+            tap_action:
+              action: more-info
+              entity: climate.trv3
+            grid_options:
+              columns: 12
+      - type: grid
+        cards:
+          - type: heading
+            heading: Кабинет
+            icon: mdi:desk
+            tap_action:
+              action: navigate
+              navigation_path: /config/areas/area/kabinet
+          - type: custom:mushroom-template-card
+            entity: sensor.air1_temperature
+            area: kabinet
+            primary: *room_primary
+            secondary: *room_secondary
+            icon: *room_icon
+            color: *room_color
+            badge_icon: *room_badge
+            badge_color: red
+            features: *room_features
+            tap_action:
+              action: more-info
+              entity: climate.trv2
+            grid_options:
+              columns: 12
+          - type: custom:mushroom-template-card
+            entity: sensor.soil2_soil_moisture
+            primary: Калатея гладкая
+            secondary: *plant_secondary
+            icon: *plant_icon
+            color: *plant_color
+            features: *plant_features
+            tap_action:
+              action: more-info
+            grid_options:
+              columns: 6
+          - type: custom:mushroom-template-card
+            entity: sensor.soil3_soil_moisture
+            primary: Спатифилум
+            secondary: *plant_secondary
+            icon: *plant_icon
+            color: *plant_color
+            features: *plant_features
+            tap_action:
+              action: more-info
+            grid_options:
+              columns: 6
+      - type: grid
+        cards:
+          - type: heading
+            heading: Спальня
+            icon: mdi:bed
+            tap_action:
+              action: navigate
+              navigation_path: /config/areas/area/bedroom
+          - type: custom:mushroom-template-card
+            entity: sensor.hmd1_temperature
+            area: bedroom
+            primary: *room_primary
+            secondary: *room_secondary
+            icon: *room_icon
+            color: *room_color
+            badge_icon: *room_badge
+            badge_color: red
+            features: *room_features
+            tap_action:
+              action: more-info
+              entity: climate.trv1
+            grid_options:
+              columns: 12
+      - type: grid
+        cards:
+          - type: heading
+            heading: Лоджия
+            icon: mdi:balcony
+            tap_action:
+              action: navigate
+              navigation_path: /config/areas/area/lodzhiia
+          # switch-din1
+          - type: tile
+            entity: switch.0xa4c13816bdbaffff
+            name: Гирлянды
+            icon: mdi:string-lights
+            color: amber
+            tap_action:
+              action: toggle
+            grid_options:
+              columns: 12

@@ -14,14 +14,12 @@ blueprint:
           device_class: moisture
     threshold:
       name: Moisture threshold
-      description: Notify when soil moisture is below this value.
-      default: 30
+      description: >
+        input_number helper that holds the threshold. Notify when soil
+        moisture is below its value.
       selector:
-        number:
-          min: 0
-          max: 100
-          step: 1
-          unit_of_measurement: "%"
+        entity:
+          domain: input_number
     chat_id:
       name: Telegram chat ID
       description: Must be an allowed chat of your Telegram bot.
@@ -55,11 +53,14 @@ actions:
               message: >
                 🌱 {{ sensor_name }} ({{ sensor_area }}) is {{ states(soil_sensor) }}.
                 Check its battery or connection.
-      - conditions: "{{ states(soil_sensor) | float < threshold | float }}"
+      - conditions:
+          - condition: numeric_state
+            entity_id: !input soil_sensor
+            below: !input threshold
         sequence:
           - action: telegram_bot.send_message
             data:
               chat_id: "{{ chat_id | int }}"
               message: >
                 🌱 {{ sensor_name }} ({{ sensor_area }}): soil moisture
-                {{ states(soil_sensor) }}% is below {{ threshold }}%. Time to water.
+                {{ states(soil_sensor) }}% is below {{ states(threshold) | int }}%. Time to water.
