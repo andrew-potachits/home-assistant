@@ -17,3 +17,11 @@ Automation blueprints live in `blueprints/automation/pflab/`. This matches the p
 Copy `blueprints/automation/pflab/` to `config/blueprints/automation/pflab/` on the Home Assistant host. Then reload automations, or go to **Settings > Automations & Scenes > Blueprints**. You can also import a single file with **Import Blueprint** and its raw GitHub URL.
 
 The plant watering and sensor unavailable blueprints need the `telegram_bot` integration set up first.
+
+## Automations
+
+Single automations live in `automations/`, one file each. Paste a file into **Settings > Automations & Scenes > (automation) > Edit in YAML**.
+
+| File | Automation | What it does |
+|------|------------|--------------|
+| `girlyandy.yaml` | Гирлянды | Turns the loggia string lights on 1h after sunset and off at 22:01. On days with an event in the `Праздники` calendar, it turns them off at 01:00 instead. |

@@ -1,0 +1,52 @@
+# Live in HA as automation.girliandy_vkliuchit (Лоджия).
+# Needs calendar.prazdniki (Local Calendar "Праздники"); "Новый год" repeats yearly on Dec 31.
+id: "1791121444585"
+alias: Гирлянды
+description: On at sunset + 1h. Off at 22:01, or at 01:00 after a day marked in calendar Праздники.
+mode: single
+triggers:
+  - trigger: sun
+    event: sunset
+    offset: "01:00:00"
+    id: "on"
+  - trigger: time
+    at: "22:01:00"
+    id: "off"
+  - trigger: time
+    at: "01:00:00"
+    id: late_off
+conditions: []
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: "on"
+          # in summer sunset + 1h is after 22:01; don't turn on for the night unless it's a holiday
+          - condition: or
+            conditions:
+              - condition: time
+                before: "22:01:00"
+              - condition: state
+                entity_id: calendar.prazdniki
+                state: "on"
+        sequence:
+          - action: switch.turn_on
+            target:
+              entity_id: switch.0xa4c13816bdbaffff
+      - conditions:
+          - condition: trigger
+            id: "off"
+          - condition: state
+            entity_id: calendar.prazdniki
+            state: "off"
+        sequence:
+          - action: switch.turn_off
+            target:
+              entity_id: switch.0xa4c13816bdbaffff
+      - conditions:
+          - condition: trigger
+            id: late_off
+        sequence:
+          - action: switch.turn_off
+            target:
+              entity_id: switch.0xa4c13816bdbaffff
