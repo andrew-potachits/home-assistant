@@ -38,7 +38,7 @@ views:
             badge_color: red
             features: &room_features
               - type: trend-graph
-                hours_to_show: 24
+                hours_to_show: 6
             # Actions can't use templates, so the TRV is named here.
             tap_action:
               action: more-info
